@@ -2,7 +2,7 @@
 #define DEBUG_SWAP  if (0)
 #define DEBUG_COMP  if (0)
 #define DEBUG_STEP  if (1)
-#define DEBUG_ENTER if (1)
+#define DEBUG_ENTER if (0)
 
 #include <stdio.h>
 #include <assert.h>
@@ -24,36 +24,19 @@
 typedef int root_type;
 
 
-void qsort_compare_index(
+void myqsort(
     void *data,
-    size_t left,
-    size_t right,
-    bool (*comp)(void *data, size_t a, size_t b),
-    void (*swap)(void *data, size_t a, size_t b)
+    const size_t arr_len,
+    const size_t element_size,
+    int (*comp)(const void *a, const void *b)
 );
 
-
-void swapMY(void *data, size_t a, size_t b) {
-    DEBUG_SWAP printf("swap:    %d, %d\n", ((root_type*)data)[a], ((root_type*)data)[b]);
-    root_type tmp = ((root_type*)data)[a];
-    ((root_type*)data)[a] = ((root_type*)data)[b];
-    ((root_type*)data)[b] = tmp;
-    DEBUG_SWAP printf("swapped: %d, %d\n", ((root_type*)data)[a], ((root_type*)data)[b]);
-}
-
-bool compMY(void *data, size_t a, size_t b) {
-    DEBUG_COMP printf("comp: %d > %d: %d\n", ((root_type*)data)[a], ((root_type*)data)[b], ((root_type*)data)[a] > ((root_type*)data)[b]);
-    return ((root_type*)data)[a] > ((root_type*)data)[b];
-}
-
 int ccomp(const void *a, const void *b) {
-    int x = *(const int *)a;
-    int y = *(const int *)b;
+    root_type x = *(root_type*)a;
+    root_type y = *(root_type*)b;
 
-    if (x < y)
-        return -1;
-    if (x > y)
-        return 1;
+    if (x < y) return -1;
+    if (x > y) return 1;
     return 0;
 }
 
@@ -68,8 +51,8 @@ int main() {
         arr_ans[i] = arr[i];
     }
 
-    qsort_compare_index(arr, 0, arr_len - 1, compMY, swapMY);
-    qsort(arr_ans, arr_len, sizeof(arr_ans[0]), ccomp);
+    myqsort(arr,     arr_len, sizeof(arr_ans[0]), ccomp);
+    qsort  (arr_ans, arr_len, sizeof(arr_ans[0]), ccomp);
 
     printf("answer:\n");
     for (size_t i = 0; i < arr_len; i++) {
@@ -85,22 +68,50 @@ int main() {
     return 0;
 }
 
-void qsort_compare_index(void *data, size_t left, size_t right, bool (*comp)(void *data, size_t a, size_t b), void (*swap)(void *data, size_t a, size_t b)) {
-    assert(data);
-    assert(right >= left);
-    
-    size_t start_left  = left;
-    size_t start_right = right;
 
-    DEBUG printf("start l: %zd, r: %zd, qsort: ", left, right);
-    for (int i = left; i < right + 1; i++) {
-        DEBUG printf("%d ", ((int*)data)[i]);
+void *getVoidShift(void *data, size_t element_size, int shift) {
+    assert(data);
+    assert(element_size > 0);
+    assert(shift >= 0);
+
+    // return (void*)(((size_t)data) + shift * element_size);
+    return (void*)((char*)data + shift * element_size);
+}
+
+// TODO: написать и сюда копирование буффером, реализация уже есть, см string_sort/main.c
+void qsort_swap(void *a, void *b, size_t element_size) {
+    assert(a);
+    assert(b);
+    assert(element_size > 0);
+
+    char *A = (char*)a, *B = (char*)b;
+    for (int i = 0; i < element_size; i++) {
+        char tmp = *A;
+        *A = *B;
+        *B = tmp;
+        A++;
+        B++;
+    }
+}
+
+void myqsort(void *data, const size_t arr_len, const size_t element_size, int (*comp)(const void *a, const void *b)) {
+    assert(data);
+    assert(comp);
+    assert(arr_len > 0);
+    assert(element_size > 0);
+ 
+    ssize_t left  = 0;
+    ssize_t right = arr_len - 1;
+
+    DEBUG printf("start left: %zd, right: %zd, len: %zd, element_size: %zd, array: ", left, right, arr_len, element_size);
+    for (int i = 0; i < arr_len; i++) {
+        DEBUG printf("%d ", *((int*)getVoidShift(data, element_size, i)));
     }
     DEBUG printf("\n"); 
 
-    if (right - left <= 1) {
-        if (comp(data, left, right)) {
-            swap(data, left, right);
+    if (arr_len <= 2) {
+        if (comp(data, getVoidShift(data, element_size, 1)) == 1) {
+            qsort_swap(data, getVoidShift(data, element_size, 1), element_size);
         }
         return;
     }
@@ -109,24 +120,26 @@ void qsort_compare_index(void *data, size_t left, size_t right, bool (*comp)(voi
     DEBUG printf("mid_value: %d\n", ((int*)data)[mid]);
 
     while (left <= right) {
-        while (comp(data, mid, left) && left <= right) left++;
-        while (comp(data, right, mid) && left <= right) right--;
+        while (left <= right && comp(getVoidShift(data, element_size, mid), getVoidShift(data, element_size, left))  ==  1) left++;
+        while (left <= right && comp(getVoidShift(data, element_size, mid), getVoidShift(data, element_size, right)) == -1) right--;
 
         if (left > right) {
             DEBUG_STEP printf(GREEN);
-            for (int i = start_left; i < left; i++) {
+            for (int i = 0; i < left; i++) {
                 DEBUG_STEP printf("%3d ", ((int*)data)[i]);
             }
             DEBUG_STEP printf(RED);
-            for (int i = left; i < start_right + 1; i++) {
+            for (int i = left; i < arr_len; i++) {
                 DEBUG_STEP printf("%3d ", ((int*)data)[i]);
             }
             DEBUG_STEP printf(STANDART "\n");
             break;
         }
 
+        printf("left: %zd, right: %zd\n", left, right);
+
         DEBUG_STEP printf(GREEN);
-        for (int i = start_left; i < left; i++) {
+        for (int i = 0; i < left; i++) {
             DEBUG_STEP printf("%3d ", ((int*)data)[i]);
         }
 
@@ -140,7 +153,7 @@ void qsort_compare_index(void *data, size_t left, size_t right, bool (*comp)(voi
         printf(BLUE "%3d ", ((int*)data)[right]);
 
         DEBUG_STEP printf(RED);
-        for (int i = right + 1; i < start_right + 1; i++) {
+        for (int i = right + 1; i < arr_len; i++) {
             DEBUG_STEP printf("%3d ", ((int*)data)[i]);
         }
 
@@ -149,23 +162,20 @@ void qsort_compare_index(void *data, size_t left, size_t right, bool (*comp)(voi
         if      (left  == mid) mid = right;
         else if (right == mid) mid = left;
 
-        swap(data, left, right);
+        qsort_swap(getVoidShift(data, element_size, left), getVoidShift(data, element_size, right), element_size);
         left++;
         right--;
     }
-
-    // if (l > start_r) return;
-
     
     DEBUG printf("mid_value: %d\n", ((int*)data)[mid]);
     
     DEBUG_ENTER getchar();
 
-    qsort_compare_index(data, start_left, left - 1, comp, swap);
-    qsort_compare_index(data, left, start_right, comp, swap);
+    if (left)               myqsort(data, left, element_size, comp);
+    if (arr_len - left) myqsort(getVoidShift(data, element_size, left), arr_len - left, element_size, comp);
 
     DEBUG printf("end qsort: ");
-    for (int i = 0; i < right + 1; i++) {
+    for (int i = 0; i < arr_len; i++) {
         DEBUG printf("%d ", ((int*)data)[i]);
     }
     DEBUG printf("\n");

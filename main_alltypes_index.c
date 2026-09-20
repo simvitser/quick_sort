@@ -47,13 +47,11 @@ bool compMY(void *data, size_t a, size_t b) {
 }
 
 int ccomp(const void *a, const void *b) {
-    int x = *(const int *)a;
-    int y = *(const int *)b;
+    root_type x = *(root_type*)a;
+    root_type y = *(root_type*)b;
 
-    if (x < y)
-        return -1;
-    if (x > y)
-        return 1;
+    if (x < y) return -1;
+    if (x > y) return 1;
     return 0;
 }
 
