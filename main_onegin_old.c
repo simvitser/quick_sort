@@ -1,5 +1,6 @@
 #define DEBUG       if (0)
 #define DEBUG_SWAP  if (0)
+#define DEBUG_COMP  if (0)
 #define DEBUG_STEP  if (0)
 #define DEBUG_ENTER if (0)
 
@@ -9,9 +10,6 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <unistd.h>
 
 #define BLACK     "\033[30m"
 #define RED       "\033[31m"
@@ -27,11 +25,6 @@
 
 #define MAX_FILE_LEN 10000
 
-typedef struct {
-    char *str;
-    size_t len;
-} String;
-
 void myqsort(
     void *data,
     const size_t arr_len,
@@ -39,121 +32,54 @@ void myqsort(
     int (*comp)(const void *a, const void *b)
 );
 
-void myprint(String s, FILE* stream) {
-    for (int i = 0; i < s.len; i++) {
-        putc(s.str[i], stream);
-    }
-    putc('\n', stream);
-}
-
-int mystrcmp(const String s1, const String s2) {
-    int i = 0;
-    for (i = 0; s1.str[i] != '\n' && s2.str[i] != '\n'; i++) {
-        int delta = s1.str[i] - s2.str[i];
-        if (delta) return delta;
-    }
-
-    return s1.str[i] - s2.str[i];
-}
-
 int comp1(const void *a, const void *b) {
-    assert(b);
-    assert(a);
+    char *s1 = *(char**)a;
+    char *s2 = *(char**)b;
 
-    String s1 = *(String*)a;
-    String s2 = *(String*)b;
-
-    return mystrcmp(s1, s2);
-}
-
-int mystrcmp_reverse(const String s1, const String s2) {
-    for (int i = 0; i < s1.len && i < s2.len; i++) {
-        int delta = s1.str[s1.len - i] - s2.str[s2.len - i];
-        if (delta) return delta;
-    }
-
-    return s1.str[0] - s2.str[0];
-}
-
-int comp2(const void *a, const void *b) {
-    assert(b);
-    assert(a);
-
-    String s1 = *(String*)a;
-    String s2 = *(String*)b;
-
-    return mystrcmp_reverse(s1, s2);
+    return strcmp(s1, s2);
 }
 
 int main() {
-    struct stat st = {};
-    int file_descriptor = open("onegin_eng.txt", O_RDONLY);
-    if (file_descriptor == -1) {
-        printf("[ERROR] file opening\n");
+    char *arr[MAX_FILE_LEN] = {};
+    FILE *file = fopen("onegin_eng.txt", "r");
+    if (file == NULL) {
+        printf("[ERROR] file reading\n");
         return 1;
     } else {
         printf("[OK] file\n");
     }
-
-    fstat(file_descriptor, &st);
     
-    char onegin[st.st_size + 2] = {};
-    
-    ssize_t onegin_len = read(file_descriptor, onegin, st.st_size);
-    
-    if (onegin_len == -1) {
-        printf("[ERROR] file reading\n");
-        return 2;
-    }
+    char *lineptr = NULL;
+    size_t n = 0;
 
-    close(file_descriptor);
-
-    onegin[onegin_len]     = '\n';
-    onegin[onegin_len + 1] = '\0';
-    
-    size_t arr_len = 0;
-    for (int i = 0; i < onegin_len; i++) if (onegin[i] == '\n') arr_len++;
-
-    String arr[arr_len] = {};
-    int last = 0;
-    int n_string = 0;
-    for (int i = 0; i < onegin_len; i++) {
-        if (onegin[i] == '\n') {
-            arr[n_string].str = onegin + last;
-            arr[n_string].len = i - last;
-            n_string++;
-            last = i + 1;
+    int file_len = 0;
+    while (getline(&lineptr, &n, file) > 0) {
+        if (lineptr == NULL) {
+            printf("[ERROR] lineptr is NULL\n");
         }
+
+        char *dup = strdup(lineptr);
+        
+        if (dup == NULL) {
+            printf("[ERROR] dup is NULL\n");
+        }
+        
+        arr[file_len] = dup;
+        file_len++;
     }
-
-    
- 
-    myqsort(arr, arr_len, sizeof(arr[0]), comp1);
-    printf("[OK] first qsort\n");
-    
-    FILE *file = fopen("answer.txt", "w");
-    for (size_t i = 0; i < arr_len; i++) {
-        myprint(arr[i], file);
-    }
-    fprintf(file, "\n\n\n\n\n------------------------------------------------------------------------\n\n\n\n");
-    
-    printf("[OK] first write\n");
-
-
-    myqsort(arr, arr_len, sizeof(arr[0]), comp2);
-    printf("[OK] second qsort\n");
-
-    
-    for (size_t i = 0; i < arr_len; i++) {
-        myprint(arr[i], file);
-    }
-    fprintf(file, "\n\n\n\n\n------------------------------------------------------------------------\n\n\n\n");
-
-    printf("[OK] second write\n");
-
-    fprintf(file, onegin);
-
+    printf("[OK] read, len: %d\n", file_len);
     fclose(file);
+ 
+    myqsort(arr, file_len, sizeof(arr[0]), comp1);
+    
+    for (size_t i = 0; i < file_len; i++) {
+        printf("%s", arr[i]);
+    }
+    printf("\n");
+
+    for (int i = 0; i < file_len; i++) {
+        free(arr[i]);
+    }
     
     return 0;
 }
@@ -240,9 +166,9 @@ void myqsort(void *data, const size_t arr_len, const size_t element_size, int (*
         DEBUG printf("%d ", *((int*)getVoidShift(data, element_size, i)));
     }
     DEBUG printf("\n"); 
-
+    
     if (arr_len < 2) return;
-    if (arr_len == 2) {
+    if (arr_len <= 2) {
         if (comp(data, getVoidShift(data, element_size, 1)) > 0) {
             qsort_swap(data, getVoidShift(data, element_size, 1), element_size);
         }
